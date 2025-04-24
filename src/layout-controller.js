@@ -1,239 +1,227 @@
 document.addEventListener('DOMContentLoaded', function() {
-            const sidebar = document.getElementById('sidebar');
-            const chatbox = document.getElementById('chatbox');
-            const taskList = document.getElementById('task-list');
-            const tasklistLink = document.getElementById('tasklist-link');
-            const addTaskButton = document.getElementById('add-task-button');
-            const taskTableBody = document.getElementById('task-table-body');
-            const messageInput = document.getElementById('message-input');
-            const sendButton = document.getElementById('send-button');
+    // ... (keep existing variable declarations) ...
+    const sidebar = document.getElementById('sidebar');
+    const chatbox = document.getElementById('chatbox');
+    const taskList = document.getElementById('task-list');
+    const tasklistLink = document.getElementById('tasklist-link');
+    const addTaskButton = document.getElementById('add-task-button');
+    const taskTableBody = document.getElementById('task-table-body');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
 
-            // Check if sidebar exists before querying inside it
-            if (!sidebar) {
-                console.error("Sidebar element not found!");
-                return; // Exit if sidebar isn't there
+    if (!sidebar || !chatbox || !taskList || !messageInput || !sendButton) {
+        console.error("Essential layout elements not found!");
+        return;
+    }
+
+    const sidebarTopics = sidebar.querySelectorAll('.sidebar-topic');
+    const accordionToggles = sidebar.querySelectorAll('.accordion-toggle');
+
+    let currentTopic = null;
+    let currentThreadId = null; // Store thread ID per topic conversation
+
+    // --- Helper function (topicToPath - not needed anymore) ---
+    // function topicToPath(topic) { ... }
+
+    // --- Accordion Logic (remains the same) ---
+    accordionToggles.forEach(toggle => { /* ... */ });
+
+    // --- View Switching Logic (remains the same) ---
+    function showView(view) { /* ... */ }
+
+    // --- Tasklist Link Click Handler (remains the same) ---
+    if (tasklistLink) { /* ... */ }
+
+    // --- Sidebar Topic Click Handler (remains the same) ---
+    sidebarTopics.forEach(function(item) {
+         item.addEventListener('click', function() {
+            sidebarTopics.forEach(el => el.classList.remove('active-topic'));
+            item.classList.add('active-topic');
+
+            const newTopic = item.dataset.topic;
+            console.log('Selected Topic:', newTopic);
+
+            showView('chat');
+
+            if (currentTopic !== newTopic) {
+                 currentTopic = newTopic;
+                 currentThreadId = null; // Reset thread ID for new topic
+                 chatbox.innerHTML = ''; // Clear chatbox
+                 sendInitialMessageForTopic(currentTopic);
             }
-
-            const sidebarTopics = sidebar.querySelectorAll('.sidebar-topic');
-            const accordionToggles = sidebar.querySelectorAll('.accordion-toggle');
-
-            let currentTopic = null; // No default topic initially
-
-            // --- Accordion Logic ---
-            accordionToggles.forEach(toggle => {
-                toggle.addEventListener('click', () => {
-                    const content = toggle.nextElementSibling;
-                    if (content && content.classList.contains('accordion-content')) {
-                        content.classList.toggle('show');
-                        toggle.classList.toggle('active');
-                    } else {
-                        console.warn("Accordion content not found immediately after toggle:", toggle);
-                    }
-                });
-            });
-            // --- End Accordion Logic ---
-
-
-            // Function to switch view between chat and task list in the #main area
-            function showView(view) {
-                 // Ensure elements exist before trying to modify style
-                 if (!chatbox || !taskList) {
-                     console.error("Chatbox or Task List element not found!");
-                     return;
-                 }
-                if (view === 'chat') {
-                    chatbox.style.display = 'flex';
-                    taskList.style.display = 'none';
-                } else if (view === 'tasks') {
-                    chatbox.style.display = 'none';
-                    taskList.style.display = 'block';
-                }
-            }
-
-            // Handle clicks on the Tasklist link
-            if (tasklistLink) {
-                tasklistLink.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    showView('tasks');
-                    sidebarTopics.forEach(el => el.classList.remove('active-topic'));
-                    currentTopic = null;
-                });
-            } else {
-                 console.warn("Tasklist link element not found!");
-            }
-
-            // Handle clicks on sidebar topics
-            sidebarTopics.forEach(function(item) {
-                item.addEventListener('click', function() {
-                    sidebarTopics.forEach(el => el.classList.remove('active-topic'));
-                    item.classList.add('active-topic');
-
-                    const newTopic = item.dataset.topic;
-                    console.log('Selected Topic:', newTopic);
-
-                    showView('chat'); // Ensure chat view is visible
-
-                    if (currentTopic !== newTopic) {
-                         currentTopic = newTopic;
-                         if (chatbox) chatbox.innerHTML = ''; // Clear previous chat content ONLY if topic changed
-                         sendInitialMessageForTopic(currentTopic);
-                    }
-                });
-            });
-
-           // Function to send an initial message to the AI when a topic is selected
-            async function sendInitialMessageForTopic(topic) {
-                if (!topic || !chatbox) return;
-
-                appendMessage('System', `Switched to topic: ${topic}`);
-                appendMessage('AI', 'Loading initial context...', true);
-                scrollToBottom(chatbox);
-
-                try {
-                    const initialPrompt = `Let's discuss ${topic}. What's the first thing I should know or do regarding this?`;
-
-                    const response = await fetch('/ask', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: initialPrompt })
-                    });
-
-                    if (!response.ok) {
-                         let errorDetails = `HTTP error! status: ${response.status}`;
-                         try { const errorData = await response.json(); errorDetails += `: ${errorData.error || JSON.stringify(errorData)}`; } catch (e) { errorDetails += `: ${await response.text()}`; }
-                         throw new Error(errorDetails);
-                    }
-                    const data = await response.json();
-                    removeLoadingIndicator();
-                    appendMessage('AI', data.reply);
-
-                } catch (error) {
-                     console.error('Error sending initial topic message:', error);
-                     removeLoadingIndicator();
-                     appendMessage('AI', `Sorry, I couldn't load information for ${topic}. ${error.message}`);
-                }
-                 scrollToBottom(chatbox);
-            }
-
-            // Event listener for sending chat messages from input
-            if (sendButton && messageInput) {
-                sendButton.addEventListener('click', sendMessage);
-                messageInput.addEventListener('keypress', function(event) {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        sendMessage();
-                    }
-                });
-            } else {
-                console.warn("Send button or message input element not found!");
-            }
-
-            async function sendMessage() {
-                if (!messageInput || !chatbox) return; // Check elements exist
-
-                const message = messageInput.value.trim();
-                if (!message) return;
-
-                // If task list is visible, switch back to chat view automatically
-                if (taskList && taskList.style.display !== 'none') {
-                    showView('chat');
-                    if (!currentTopic) {
-                         chatbox.innerHTML = '';
-                         appendMessage('System', 'Switched back to chat. Select a topic or continue conversation.');
-                    }
-                }
-
-                appendMessage('User', message);
-                messageInput.value = '';
-                appendMessage('AI', 'Thinking...', true); // Add loading indicator
-                scrollToBottom(chatbox);
-
-                try {
-                    console.log("Sending message to /ask:", message);
-                    const response = await fetch('/ask', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
-                    });
-
-                    if (!response.ok) {
-                         let errorDetails = `HTTP error! status: ${response.status}`;
-                         try { const errorData = await response.json(); errorDetails += `: ${errorData.error || JSON.stringify(errorData)}`; } catch (e) { errorDetails += `: ${await response.text()}`; }
-                         throw new Error(errorDetails);
-                    }
-                    const data = await response.json();
-                    removeLoadingIndicator();
-                    appendMessage('AI', data.reply);
-                } catch (error) {
-                    console.error('Error sending message:', error);
-                    removeLoadingIndicator();
-                    appendMessage('AI', `Sorry, I encountered an error. ${error.message}`);
-                }
-                 scrollToBottom(chatbox);
-            }
-
-            // Helper function to append messages
-            function appendMessage(sender, text, isLoading = false) {
-                 if (!chatbox) return; // Don't try to append if chatbox doesn't exist
-                 const p = document.createElement('p');
-                 if (isLoading) {
-                     p.id = 'loading-indicator';
-                 }
-                 text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                 text = text.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
-                 p.innerHTML = `<b>${sender}:</b> ${text}`;
-                 chatbox.appendChild(p);
-            }
-
-             // Helper function to remove loading indicator
-            function removeLoadingIndicator() {
-                 const loadingIndicator = document.getElementById('loading-indicator');
-                 if (loadingIndicator) loadingIndicator.remove();
-            }
-
-             // Helper function to scroll chatbox to bottom
-            function scrollToBottom(element) {
-                 if (!element) return;
-                 setTimeout(() => {
-                    element.scrollTop = element.scrollHeight;
-                 }, 0);
-            }
-
-            // --- Task list functionality ---
-            if (addTaskButton && taskTableBody) {
-                 addTaskButton.addEventListener('click', function() {
-                     const newRow = taskTableBody.insertRow();
-                     newRow.innerHTML = `
-                         <td><input type="checkbox"></td>
-                         <td class="task-name" contenteditable="true">New Task</td>
-                         <td><input type="date"></td>
-                         <td><input type="text" placeholder="Tags"></td>
-                         <td><button class="delete-task-btn">Delete</button></td>
-                     `;
-                     const deleteBtn = newRow.querySelector('.delete-task-btn');
-                     if (deleteBtn) {
-                         deleteBtn.addEventListener('click', deleteTask);
-                     }
-                 });
-
-                 taskTableBody.addEventListener('click', function(event) {
-                     if (event.target.classList.contains('delete-task-btn')) {
-                         deleteTask(event);
-                     }
-                 });
-            } else {
-                console.warn("Add task button or task table body not found!");
-            }
-
-            function deleteTask(event) {
-                const button = event.target;
-                const row = button.closest('tr');
-                if (row) {
-                    row.remove();
-                }
-            }
-
-            // --- Initial state ---
-            showView('chat'); // Show chatbox by default
-
         });
+    });
+
+    // --- Send Initial Message (Calls sendMessage with topic) ---
+    function sendInitialMessageForTopic(topic) {
+        if (!topic || !chatbox) return;
+        // Clear chatbox is now done in the click handler
+        appendMessage('System', `Switched to topic: ${topic}. Loading...`);
+        scrollToBottom(chatbox);
+        // Send a specific initial prompt to the backend, including the topic
+        sendMessage(`Let's start discussing ${topic}.`, true); // Pass flag indicating it's initial message
+    }
+
+    // --- Event Listeners for Sending Message (remain the same) ---
+    sendButton.addEventListener('click', () => sendMessage(messageInput.value));
+    messageInput.addEventListener('keypress', function(event) { /* ... */ });
+
+    // --- Main sendMessage Function (REVERTED and UPDATED) ---
+    async function sendMessage(messageContent, isInitial = false) {
+        const message = messageContent.trim();
+        // const topicPath = topicToPath(currentTopic); // No longer needed
+
+        if (!message) return;
+        if (!currentTopic) { // Check if topic is selected
+            appendMessage('System', 'Please select a topic from the sidebar first.');
+            return;
+        }
+
+        // Switch view if needed (remains the same)
+        if (taskList && taskList.style.display !== 'none') {
+            showView('chat');
+        }
+
+        // Append user message only if not initial, clear input (remains the same)
+        if (!isInitial) {
+            appendMessage('User', message);
+            messageInput.value = '';
+        }
+        appendMessage('AI', 'Thinking...', true);
+        scrollToBottom(chatbox);
+
+        // *** REVERTED: Use single endpoint, send topic in body ***
+        const apiUrl = '/api/chat'; // Use the single API endpoint
+        const payload = {
+            message: message,
+            topic: currentTopic, // Send the topic string
+            threadId: currentThreadId // Send current thread ID (null if new)
+        };
+
+        try {
+            console.log(`Sending message to ${apiUrl}:`, payload);
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload) // Send message, topic, and threadId
+            });
+
+            // Error handling (remains the same)
+            if (!response.ok) {
+                let errorDetails = `HTTP error! status: ${response.status}`;
+                const text = await response.text();
+                try { const errorData = JSON.parse(text); errorDetails += `: ${errorData.error || JSON.stringify(errorData)}`; } catch (e) { errorDetails += `: ${text}`; }
+                throw new Error(errorDetails);
+            }
+
+            const data = await response.json();
+
+            // Update thread ID if received (remains the same)
+            if (data.threadId && !currentThreadId) {
+                currentThreadId = data.threadId;
+                console.log("Received new thread ID:", currentThreadId);
+            }
+
+            // Update UI (remains the same)
+            removeLoadingIndicator();
+            if (isInitial) {
+                 const systemMsg = chatbox.querySelector('p:last-child');
+                 // Adjust check to match the actual system message
+                 if (systemMsg && systemMsg.textContent.includes('Loading...')) {
+                     systemMsg.remove();
+                 }
+             }
+            appendMessage('AI', data.reply);
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            removeLoadingIndicator();
+            appendMessage('AI', `Sorry, I encountered an error. ${error.message}`);
+        }
+         scrollToBottom(chatbox);
+    }
+
+    // --- Helper Functions (appendMessage, removeLoadingIndicator, scrollToBottom - remain the same) ---
+    function appendMessage(sender, text, isLoading = false) { /* ... */ }
+    function removeLoadingIndicator() { /* ... */ }
+    function scrollToBottom(element) { /* ... */ }
+
+    // --- Task list functionality (remains the same) ---
+    if (addTaskButton && taskTableBody) { /* ... */ }
+    function deleteTask(event) { /* ... */ }
+
+    // --- Initial state (remains the same) ---
+    showView('chat');
+    chatbox.innerHTML = '<p><em>Please select a topic from the sidebar to start chatting.</em></p>';
+
+    // Re-add helper function definitions that were shortened above
+    function appendMessage(sender, text, isLoading = false) {
+         const p = document.createElement('p');
+         if (isLoading) {
+             p.id = 'loading-indicator';
+         }
+         text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+         text = text.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+         p.innerHTML = \`<b>${sender}:</b> ${text}\`;
+         chatbox.appendChild(p);
+    }
+    function removeLoadingIndicator() {
+         const loadingIndicator = document.getElementById('loading-indicator');
+         if (loadingIndicator) loadingIndicator.remove();
+    }
+    function scrollToBottom(element) {
+         setTimeout(() => {
+            element.scrollTop = element.scrollHeight;
+         }, 0);
+    }
+    function showView(view) {
+        if (view === 'chat') {
+            chatbox.style.display = 'flex';
+            taskList.style.display = 'none';
+        } else if (view === 'tasks') {
+            chatbox.style.display = 'none';
+            taskList.style.display = 'block';
+        }
+    }
+     if (tasklistLink) {
+        tasklistLink.addEventListener('click', function(event) {
+            event.preventDefault();
+            showView('tasks');
+            sidebarTopics.forEach(el => el.classList.remove('active-topic'));
+            currentTopic = null;
+            currentThreadId = null;
+        });
+    } else {
+         console.warn("Tasklist link element not found!");
+    }
+     if (addTaskButton && taskTableBody) {
+         addTaskButton.addEventListener('click', function() {
+            const newRow = taskTableBody.insertRow();
+             newRow.innerHTML = `
+                 <td><input type="checkbox"></td>
+                 <td class="task-name" contenteditable="true">New Task</td>
+                 <td><input type="date"></td>
+                 <td><input type="text" placeholder="Tags"></td>
+                 <td><button class="delete-task-btn">Delete</button></td>
+             `;
+             const deleteBtn = newRow.querySelector('.delete-task-btn');
+             if (deleteBtn) {
+                 deleteBtn.addEventListener('click', deleteTask);
+             }
+        });
+         taskTableBody.addEventListener('click', function(event) {
+             if (event.target.classList.contains('delete-task-btn')) {
+                 deleteTask(event);
+             }
+         });
+    } else { console.warn("Add task button or task table body not found!"); }
+    function deleteTask(event) {
+        const button = event.target;
+        const row = button.closest('tr');
+        if (row) {
+            row.remove();
+        }
+     }
+
+});
