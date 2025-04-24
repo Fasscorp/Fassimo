@@ -7,10 +7,6 @@ import { customerInfoSchema } from '../schemas/customer-info.schema.js';
 import { saveCustomerInfoTool } from '../tools/save-customer-info.tool.js';
 // Import others as needed
 
-// --- Constants ---
-// REMOVED: const NEWLINE = '
-';
-
 // --- Assistant ID Mapping ---
 const assistantMap = {
     "Customer Information": "CUSTOMER_INTERVIEW_ASSISTANT_ID",
@@ -79,20 +75,20 @@ export async function onRequestPost(context) {
         // Send to Assistant
         const response = await conversation.send();
 
-        // --- Process Response ---
+        // --- Process Response (Simplified) ---
         let reply = "Sorry, unexpected response.";
         let newThreadId = conversation.threadId || null;
 
-        if (response?.type === 'message' && response.message?.role === 'assistant' && response.message?.content) {
-            // FIX 4: Use join('') to concatenate array elements without separator
-            reply = Array.isArray(response.message.content) ? response.message.content.join('') : String(response.message.content);
+        if (response?.type === 'message' && response.message?.role === 'assistant' && response.message?.content != null) {
+            // FIX 5: Directly convert content to string, avoid join/Array.isArray
+            reply = String(response.message.content);
         } else if (response?.type === 'tool_call_result') {
             reply = response.result?.message || "Processed request.";
         } else {
             console.warn("Unexpected response format:", JSON.stringify(response, null, 2));
-            if (response?.message?.content) {
-                 // FIX 4: Use join('') here as well
-                reply = Array.isArray(response.message.content) ? response.message.content.join('') : String(response.message.content);
+            // Keep simple fallback for unexpected structure
+            if (response?.message?.content != null) {
+                reply = String(response.message.content);
             } else if (typeof response?.result?.message === 'string') {
                 reply = response.result.message;
             }
