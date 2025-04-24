@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Conversation</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #sidebar {
+            width: 200px;
+            background-color: #eee;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        #sidebar li,
+        #sidebar .sidebar-topic {
+            padding: 8px 0;
+            cursor: pointer;
+        }
+        #sidebar a{
+            text-decoration: none;
+            color: inherit;
+        }
+
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chatbox {
+            flex: 1;
+            padding: 20px;
+            overflow-y: scroll;
+        }
+
+        #input-area {
+            padding: 20px;
+            border-top: 1px solid #ccc;
+            display: flex;
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #send-button {
+            background-color: #5835D8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        /* Style the active topic */
+        .active-topic {
+            font-weight: bold;
+            color: #5835D8;
+        }
+
+        /* Style for section dividers */
+        .section-divider {
+            margin: 10px 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        /* Style for the task list */
+        #task-list {
+            padding: 20px;
+            display: none; /* Keep task list hidden initially */
+        }
+
+        #task-list table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #task-list th,
+        #task-list td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #task-list th {
+            background-color: #f0f0f0;
+        }
+
+        .task-name {
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <img src="https://cdn.skillplate.com/skillplate-logo.svg" alt="Skillplate Logo" width="150">
+        <div class="section-divider"></div>
+        <a href="#" id="tasklist-link"><h2>Tasklist</h2></a>
+        <div class="section-divider"></div>
+        <ul>
+            <li><strong>Onboarding</strong></li>
+            <ul>
+                <li class="sidebar-topic" data-topic="Customer Information">Customer Information</li>
+                <li class="sidebar-topic" data-topic="General Settings">General Settings</li>
+                <li class="sidebar-topic" data-topic="Payment Settings">Payment Settings</li>
+                <li class="sidebar-topic" data-topic="Domain Settings">Domain Settings</li>
+            </ul>
+            <li><strong>Products</strong></li>
+            <ul>
+                <li class="sidebar-topic" data-topic="Product Ideas">Product Ideas</li>
+                <li class="sidebar-topic" data-topic="Create Product">Create Product</li>
+                <li class="sidebar-topic" data-topic="Product list">Product list</li>
+                <ul>
+                    <li class="sidebar-topic" data-topic="Product 1">Product 1</li>
+                    <li class="sidebar-topic" data-topic="Product 2">Product 2</li>
+                </ul>
+            </ul>
+        </ul>
+    </div>
+
+    <div id="main">
+        <div id="chatbox">
+            <!-- Chat messages will go here -->
+        </div>
+        <div id="task-list">
+            <h2>Tasks</h2>
+            <button id="add-task-button">Add Task</button>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Complete</th>
+                        <th>Task Name</th>
+                        <th>Due Date</th>
+                        <th>Tags</th>
+                    </tr>
+                </thead>
+                <tbody id="task-table-body">
+                    <tr>
+                        <td><input type="checkbox"></td>
+                        <td class="task-name">Task 1</td>
+                        <td><input type="date" value="2024-01-01"></td>
+                        <td><input type="text" value="Important"></td>
+                    </tr>
+                    <tr>
+                        <td><input type="checkbox"></td>
+                        <td class="task-name">Task 2</td>
+                        <td><input type="date" value="2024-01-05"></td>
+                        <td><input type="text" value="Urgent"></td>
+                    </tr>
+                    <tr>
+                        <td><input type="checkbox"></td>
+                        <td class="task-name">Task 3</td>
+                        <td><input type="date" value="2024-01-10"></td>
+                        <td><input type="text"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Removed customer-info-display div -->
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Type your message...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.getElementById('sidebar');
+            const chatbox = document.getElementById('chatbox');
+            const taskList = document.getElementById('task-list');
+            const tasklistLink = document.getElementById('tasklist-link');
+            const addTaskButton = document.getElementById('add-task-button');
+            const taskTableBody = document.getElementById('task-table-body');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const sidebarTopics = sidebar.querySelectorAll('.sidebar-topic');
+            let currentTopic = 'General'; // Default topic
+
+            // Function to switch view between chat and task list
+            function showView(view) {
+                chatbox.style.display = 'none';
+                taskList.style.display = 'none';
+                if (view === 'chat') {
+                    chatbox.style.display = 'block';
+                } else if (view === 'tasks') {
+                    taskList.style.display = 'block';
+                }
+            }
+
+            // Handle clicks on the Tasklist link
+            tasklistLink.addEventListener('click', function(event) {
+                event.preventDefault();
+                showView('tasks');
+                // Optionally clear active topic selection
+                sidebarTopics.forEach(el => el.classList.remove('active-topic'));
+            });
+
+            // Handle clicks on sidebar topics
+            sidebarTopics.forEach(function(item) {
+                item.addEventListener('click', function() {
+                    // Set active class
+                    sidebarTopics.forEach(el => el.classList.remove('active-topic'));
+                    item.classList.add('active-topic');
+
+                    // Update the current topic
+                    currentTopic = item.dataset.topic;
+                    console.log('Current Topic:', currentTopic); // For debugging
+
+                    // Switch to chat view
+                    showView('chat');
+
+                    // Clear previous chat content
+                    chatbox.innerHTML = '';
+
+                    // Optionally send a starting message to the AI based on the topic
+                    sendInitialMessageForTopic(currentTopic);
+
+                });
+            });
+
+            // Function to send an initial message to the AI when a topic is selected
+            async function sendInitialMessageForTopic(topic) {
+                // Add a message to the chatbox indicating the new topic
+                chatbox.innerHTML += `<p><em>Switched to topic: ${topic}</em></p>`;
+                chatbox.innerHTML += '<p id="loading-indicator"><b>AI:</b> Loading...</p>';
+                chatbox.scrollTop = chatbox.scrollHeight;
+
+                try {
+                     // You might want a more specific prompt than just the topic name
+                    const initialPrompt = `Let's talk about ${topic}. What should we discuss first?`;
+
+                    const response = await fetch('/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ message: initialPrompt })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if(loadingIndicator) loadingIndicator.remove();
+                    chatbox.innerHTML += `<p><b>AI:</b> ${data.reply}</p>`;
+
+                } catch (error) {
+                     console.error('Error sending initial topic message:', error);
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if(loadingIndicator) loadingIndicator.remove();
+                    chatbox.innerHTML += `<p><b>AI:</b> Error starting conversation about ${topic}. ${error.message}</p>`;
+                }
+                 chatbox.scrollTop = chatbox.scrollHeight;
+            }
+
+             // Event listener for sending chat messages from input
+            sendButton.addEventListener('click', async function() {
+                const message = messageInput.value.trim();
+                if (!message) return;
+
+                chatbox.innerHTML += `<p><b>User:</b> ${message}</p>`;
+                messageInput.value = '';
+                chatbox.innerHTML += '<p id="loading-indicator"><b>AI:</b> Typing...</p>';
+                 chatbox.scrollTop = chatbox.scrollHeight;
+
+                try {
+                     // Include the current topic context in the message to the backend (optional but helpful)
+                    const messageWithContext = `Topic: ${currentTopic}. User message: ${message}`;
+
+                    const response = await fetch('/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                         // Sending the raw message, the context is handled by the agent setup
+                        body: JSON.stringify({ message: message })
+                        // Alternatively, send context:
+                        // body: JSON.stringify({ message: messageWithContext })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if(loadingIndicator) loadingIndicator.remove();
+                    chatbox.innerHTML += `<p><b>AI:</b> ${data.reply}</p>`;
+
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if(loadingIndicator) loadingIndicator.remove();
+                    chatbox.innerHTML += `<p><b>AI:</b> Error: Could not get a response. ${error.message}</p>`;
+                }
+                 chatbox.scrollTop = chatbox.scrollHeight;
+            });
+
+            // Allow sending message with Enter key
+            messageInput.addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    sendButton.click();
+                }
+            });
+
+            // Task list functionality (remains the same)
+            addTaskButton.addEventListener('click', function() {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td><input type="checkbox"></td>
+                    <td class="task-name">New Task</td>
+                    <td><input type="date"></td>
+                    <td><input type="text" placeholder="Tags"></td>
+                `;
+                taskTableBody.appendChild(newRow);
+                const newTaskName = newRow.querySelector('.task-name');
+                newTaskName.addEventListener('click', makeTaskNameEditable);
+            });
+
+            const taskNames = document.querySelectorAll('.task-name');
+            taskNames.forEach(taskName => {
+                taskName.addEventListener('click', makeTaskNameEditable);
+            });
+
+            function makeTaskNameEditable(event) {
+                const taskName = event.target;
+                const currentText = taskName.textContent;
+                const inputElement = document.createElement('input');
+                inputElement.type = 'text';
+                inputElement.value = currentText;
+
+                inputElement.addEventListener('blur', function() {
+                    taskName.textContent = inputElement.value;
+                    taskName.addEventListener('click', makeTaskNameEditable);
+                });
+
+                taskName.removeEventListener('click', makeTaskNameEditable);
+                taskName.textContent = '';
+                taskName.appendChild(inputElement);
+                inputElement.focus();
+            }
+
+            // Initial state: Show chatbox by default
+            showView('chat');
+            // Optionally trigger initial message for the default topic
+            // sendInitialMessageForTopic(currentTopic);
+        });
+    </script>
+
+</body>
+</html>
