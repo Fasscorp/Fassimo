@@ -8,8 +8,8 @@ import { saveCustomerInfoTool } from '../tools/save-customer-info.tool.js';
 // Import others as needed
 
 // --- Constants ---
-const NEWLINE = '
-'; // Define newline character as a constant
+// REMOVED: const NEWLINE = '
+';
 
 // --- Assistant ID Mapping ---
 const assistantMap = {
@@ -84,15 +84,15 @@ export async function onRequestPost(context) {
         let newThreadId = conversation.threadId || null;
 
         if (response?.type === 'message' && response.message?.role === 'assistant' && response.message?.content) {
-            // FIX 3: Use NEWLINE constant in join
-            reply = Array.isArray(response.message.content) ? response.message.content.join(NEWLINE) : String(response.message.content);
+            // FIX 4: Use join('') to concatenate array elements without separator
+            reply = Array.isArray(response.message.content) ? response.message.content.join('') : String(response.message.content);
         } else if (response?.type === 'tool_call_result') {
             reply = response.result?.message || "Processed request.";
         } else {
             console.warn("Unexpected response format:", JSON.stringify(response, null, 2));
             if (response?.message?.content) {
-                 // FIX 3: Use NEWLINE constant in join
-                reply = Array.isArray(response.message.content) ? response.message.content.join(NEWLINE) : String(response.message.content);
+                 // FIX 4: Use join('') here as well
+                reply = Array.isArray(response.message.content) ? response.message.content.join('') : String(response.message.content);
             } else if (typeof response?.result?.message === 'string') {
                 reply = response.result.message;
             }
