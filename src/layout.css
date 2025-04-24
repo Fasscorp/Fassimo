@@ -1,0 +1,164 @@
+body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #sidebar {
+            width: 200px;
+            background-color: #eee;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            overflow-y: auto; /* Added in case content overflows */
+            display: flex; /* Added for flex layout */
+            flex-direction: column; /* Stack items vertically */
+        }
+
+        #sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0; /* Reset default margin */
+        }
+
+        #sidebar li,
+        #sidebar .sidebar-topic {
+            padding: 8px 0;
+            cursor: pointer;
+        }
+        #sidebar a{
+            text-decoration: none;
+            color: inherit;
+        }
+
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Ensure main takes full height */
+            overflow: hidden; /* Prevent body scroll */
+        }
+
+        #chatbox {
+            flex: 1;
+            padding: 20px;
+            overflow-y: scroll;
+            background-color: #fff; /* Added background for chat */
+            display: flex; /* Use flexbox */
+            flex-direction: column; /* Stack messages vertically */
+        }
+
+        #input-area {
+            padding: 20px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            background-color: #f8f8f8; /* Added background for input */
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #send-button {
+            background-color: #5835D8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        /* Style the active topic */
+        .active-topic {
+            font-weight: bold;
+            color: #5835D8;
+        }
+
+        /* Style for section dividers */
+        .section-divider {
+            margin: 10px 0;
+            border-bottom: 1px solid #ccc;
+            width: 100%; /* Ensure divider takes full width */
+        }
+
+        /* Style for the task list */
+        #task-list {
+            flex: 1; /* Allow task list to take space like chatbox */
+            padding: 20px;
+            display: none; /* Keep task list hidden initially */
+            background-color: #fff; /* Added background */
+            overflow-y: auto; /* Added scroll if needed */
+        }
+
+        #task-list table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #task-list th,
+        #task-list td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #task-list th {
+            background-color: #f0f0f0;
+        }
+
+        .task-name {
+            /* Removed cursor: pointer if using contenteditable */
+        }
+        #task-list button { /* Basic button styling for task list */
+             margin-bottom: 10px;
+             padding: 5px 10px;
+             cursor: pointer;
+        }
+        .delete-task-btn {
+            padding: 2px 5px;
+            cursor: pointer;
+            color: red;
+            background: none;
+            border: none;
+        }
+
+
+        /* --- Accordion Styles --- */
+        .accordion-toggle {
+            cursor: pointer;
+            padding: 8px 0;
+            display: block; /* Make it block to take full width */
+            font-weight: bold; /* Make header bold */
+            position: relative; /* For indicator */
+        }
+         /* Optional: Style for indicator */
+        .accordion-toggle::after {
+            content: '\25B6'; /* Right-pointing triangle */
+            position: absolute;
+            right: 5px;
+            font-size: 0.8em;
+            transition: transform 0.2s ease-in-out;
+        }
+        .accordion-toggle.active::after {
+             transform: rotate(90deg); /* Rotate triangle when active */
+        }
+
+        .accordion-content {
+            display: none; /* Hide content by default */
+            padding-left: 15px; /* Indent sub-items */
+            list-style: none;
+            margin: 0;
+        }
+        .accordion-content.show {
+            display: block; /* Show content when active */
+        }
+         /* Ensure topics inside accordion are block level too */
+        .accordion-content .sidebar-topic {
+            display: block;
+        }
+        /* --- End Accordion Styles --- */
