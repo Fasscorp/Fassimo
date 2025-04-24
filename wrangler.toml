@@ -1,12 +1,21 @@
 # wrangler.toml
 name = "myapp" # Replace with your actual project name if desired
-compatibility_date = "2024-09-23" # Updated compatibility date as suggested by error
+compatibility_date = "2024-04-24" # Use a recent date
 
 # Pages build output directory
 pages_build_output_dir = "dist"
 
 # Node.js compatibility flag for Pages Functions
+# Keep this even if only using KV for now, doesn't hurt
 compatibility_flags = [ "nodejs_compat" ]
+
+# KV Namespace binding for local development simulation AND deployment
+[[kv_namespaces]]
+binding = "APP_DATA" # Must match the variable name used in code
+# IMPORTANT: Replace with the Namespace ID found in Cloudflare Dashboard -> Workers & Pages -> KV
+id = "85cb39e2b0d04fe79a8d01f69a81875c"
+# IMPORTANT: Replace with the Preview Namespace ID if available, otherwise use Production ID again
+preview_id = "YOUR_PREVIEW_NAMESPACE_ID_HERE"
 
 # Add other configurations if needed
 # [vars]

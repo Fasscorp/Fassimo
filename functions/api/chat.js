@@ -1,127 +1,165 @@
 // functions/api/chat.js
 
 import OpenAI from 'openai';
-// Import the Node Driver DB utility functions (CORRECTED PATH AGAIN)
-import { getTasksCollection, getCustomersCollection } from '../databases/db.js';
+import { v4 as uuidv4 } from 'uuid'; // Import UUID library
+
+// We might need helper functions if db logic gets complex, but for now access KV directly
+// import { getTasksCollectionHelper, getCustomersCollectionHelper } from '../databases/db.js';
 
 // --- Assistant ID Mapping ---
 const assistantMap = {
     "Customer Information": "CUSTOMER_INTERVIEW_ASSISTANT_ID",
+    "Branding Settings": "BRANDING_ASSISTANT_ID", // Added mapping
     "Product Ideas": "PRODUCT_IDEAS_ASSISTANT_ID",
     "General Settings": "GENERAL_SETTINGS_ASSISTANT_ID",
     // Add mappings for all topics
 };
 
-// --- Tool Definitions (OpenAI Format) ---
-const toolsOpenAIFormat = [
-    {
-        type: "function",
-        function: {
-            name: "saveCustomerData",
-            description: "Saves the collected customer information. Ask about logo and brand color too. If logo or color are missing, mention a task will be added.",
-            parameters: {
-                type: "object",
-                properties: {
-                    customerName: { type: "string", description: "Full name of the customer" },
-                    companyName: { type: "string", description: "Name of the customer company (optional)" },
-                    email: { type: "string", description: "Customer email address" },
-                    projectNeeds: { type: "string", description: "Summary of the customer project needs" },
-                    timeline: { type: "string", description: "Project timeline (optional)" },
-                    budget: { type: "string", description: "Estimated budget (optional)" },
-                    logoLink: { type: "string", description: "URL link to the customer logo file (e.g., SVG, PNG) (optional)" },
-                    primaryBrandColor: { type: "string", description: "Primary brand color (e.g., hex code like #FFFFFF) (optional)" },
-                },
-                required: ["customerName", "email", "projectNeeds"]
-            },
-        }
+// --- Tool Parameter Schemas ---
+const customerInfoParams = {
+    type: "object",
+    properties: {
+        customerName: { type: "string", description: "Full name of the customer" },
+        companyName: { type: "string", description: "Name of the customer company (optional)" },
+        email: { type: "string", description: "Customer email address for identification" },
+        projectNeeds: { type: "string", description: "Summary of the customer project needs" },
+        timeline: { type: "string", description: "Project timeline (optional)" },
+        budget: { type: "string", description: "Estimated budget (optional)" },
+    },
+    required: ["customerName", "email", "projectNeeds"]
+};
+
+const brandingParams = {
+    type: "object",
+    properties: {
+        logoLink: { type: "string", description: "URL link to the customer logo file (e.g., SVG, PNG). Should be null or empty if not provided." },
+        primaryBrandColor: { type: "string", description: "Primary brand color (e.g., hex code like #FFFFFF). Should be null or empty if not provided." }
+    },
+    required: [] // Handler checks for values
+};
+
+// --- Tool Definitions --- (Passed to OpenAI Run)
+const customerInfoTool = {
+    type: "function",
+    function: {
+        name: "saveCustomerData",
+        description: "Saves the collected customer information (name, email, needs, timeline, budget).",
+        parameters: customerInfoParams
     }
-    // Add other tool definitions
-];
+};
 
-// --- Tool Handlers --- (Using Node Driver Collections, ensuring client closure)
+const brandingTool = {
+    type: "function",
+    function: {
+        name: "saveBrandingData",
+        description: "Saves the logo URL and primary brand color. Mentions task creation if data is missing.",
+        parameters: brandingParams
+    }
+};
+
+
+// --- Tool Handlers --- (Using Cloudflare KV)
 const toolHandlers = {
-    saveCustomerData: async (args, context) => {
+    saveCustomerData: async (args, context, threadId) => {
         console.log("HANDLER: saveCustomerData called with:", args);
-        let message = "Okay, I have saved the customer information.";
-        let taskAdded = false;
-        let customerClient = null;
-        let taskClient = null;
-
+        const message = "Okay, I have saved the customer information.";
+        const kv = context.env.APP_DATA;
         try {
-            // Basic validation
             if (!args.customerName || !args.email || !args.projectNeeds) {
                 return JSON.stringify({ success: false, error: "Missing required fields (name, email, needs)." });
             }
+            const customerKey = `customer:${args.email}`;
+            let existingData = {};
+            const existingValue = await kv.get(customerKey);
+            if (existingValue) {
+                existingData = JSON.parse(existingValue);
+            }
+            // Only save fields defined in this tool's schema
+            const dataToSave = {
+                customerName: args.customerName,
+                companyName: args.companyName,
+                email: args.email,
+                projectNeeds: args.projectNeeds,
+                timeline: args.timeline,
+                budget: args.budget
+            };
+            const customerData = { ...existingData, ...dataToSave, updatedAt: new Date().toISOString() };
+            await kv.put(customerKey, JSON.stringify(customerData));
+            console.log(`Customer data updated/saved to KV with key: ${customerKey}`);
+            return JSON.stringify({ success: true, message: message });
+        } catch (kvError) {
+            console.error("KV error in saveCustomerData handler:", kvError);
+            return JSON.stringify({ success: false, error: `Failed to save customer data: ${kvError.message}` });
+        }
+    },
 
-            // Get DB collections (get client too)
-            const { client: custClient, collection: customersCollection } = await getCustomersCollection(context);
-            customerClient = custClient; // Assign for finally block
+    saveBrandingData: async (args, context, threadId) => {
+        console.log("HANDLER: saveBrandingData called with:", args);
+        let message = "Okay, I've saved the branding settings.";
+        let taskAdded = false;
+        const kv = context.env.APP_DATA;
 
-            // Save customer data
-            const customerFilter = { email: args.email };
-            const customerUpdate = { $set: { ...args, updatedAt: new Date() } };
-            const customerOptions = { upsert: true };
-            const customerResult = await customersCollection.updateOne(customerFilter, customerUpdate, customerOptions);
-            console.log("Customer save result:", customerResult);
+        // We need customer context. Let's assume the assistant asks for email if needed,
+        // or we retrieve based on threadId (requires storing thread->email mapping first)
+        // For now, store branding associated with the threadId as a simpler approach.
+        const brandingKey = `branding:${threadId}`; // Use threadId for association
 
-            // Check for logo and color & add task if needed
+        if (!threadId) {
+             console.error("Cannot save branding data without threadId context.");
+             return JSON.stringify({ success: false, error: "Could not determine context to save branding for." });
+        }
+
+        try {
             const hasLogo = args.logoLink && args.logoLink.trim() !== '';
             const hasColor = args.primaryBrandColor && args.primaryBrandColor.trim() !== '';
 
-            if (!hasLogo || !hasColor) {
-                 const { client: tClient, collection: tasksCollection } = await getTasksCollection(context);
-                 taskClient = tClient; // Assign task client for finally block
+            // Save branding data keyed by threadId
+            const brandingData = {
+                logoLink: args.logoLink || null,
+                primaryBrandColor: args.primaryBrandColor || null,
+                updatedAt: new Date().toISOString()
+            };
+            await kv.put(brandingKey, JSON.stringify(brandingData));
+            console.log(`Branding data saved to KV with key: ${brandingKey}`);
 
+            // Add task if needed
+            if (!hasLogo || !hasColor) {
                 const missingItems = [];
                 if (!hasLogo) missingItems.push('logo link');
                 if (!hasColor) missingItems.push('primary brand color');
                 const taskDescription = `Provide ${missingItems.join(' and ')}.`;
+                const taskRequestKey = `taskreq:${threadId}:${taskDescription}`; // Use threadId
+                const existingTaskRequest = await kv.get(taskRequestKey);
 
-                const existingTask = await tasksCollection.findOne({
-                    relatedCustomerEmail: args.email,
-                    name: taskDescription,
-                    completed: false
-                });
-
-                if (!existingTask) {
+                if (!existingTaskRequest) {
+                    const taskId = uuidv4();
+                    const taskKey = `task:${taskId}`;
                     const newTask = {
-                         name: taskDescription,
-                         relatedCustomerEmail: args.email,
-                         createdAt: new Date(),
-                         dueDate: null,
-                         tags: ["Onboarding", "Assets"],
-                         completed: false,
-                         order: Date.now()
-                     };
-                    const taskResult = await tasksCollection.insertOne(newTask);
-                    console.log(`TASK ADDED: ID ${taskResult.insertedId} - ${taskDescription}`);
+                        _id: taskId,
+                        name: taskDescription,
+                        relatedThreadId: threadId, // Link task to thread
+                        createdAt: new Date().toISOString(),
+                        dueDate: null,
+                        tags: ["Onboarding", "Assets"],
+                        completed: false,
+                        order: Date.now()
+                    };
+                    await kv.put(taskKey, JSON.stringify(newTask));
+                    await kv.put(taskRequestKey, "created", { expirationTtl: 3600 });
+                    console.log(`TASK ADDED to KV: Key ${taskKey} - ${taskDescription}`);
                     taskAdded = true;
                     message += ` Since the ${missingItems.join(' or ')} was missing, I've added a reminder task for you in the Tasklist section.`;
                 } else {
-                    console.log(`Task already exists for ${taskDescription} for ${args.email}`);
-                     message += ` I see there is already a task for the missing ${missingItems.join(' or ')}. Please check the Tasklist section.`;
+                    console.log(`Task request already processed recently for ${taskDescription} for thread ${threadId}`);
+                    message += ` I see there is already a task for the missing ${missingItems.join(' or ')}. Please check the Tasklist section.`;
                 }
             }
-
             return JSON.stringify({ success: true, taskAdded: taskAdded, message: message });
-
-        } catch (dbError) {
-            console.error("Database error in saveCustomerData handler:", dbError);
-            return JSON.stringify({ success: false, error: `Failed to save data: ${dbError.message}` });
-        } finally {
-             // Close both potential clients
-            if (customerClient) {
-                 await customerClient.close().catch(err => console.error("Error closing customer DB client:", err));
-             }
-            if (taskClient) {
-                 // Important: Check if taskClient was actually assigned before closing
-                 if (taskClient !== customerClient) { // Avoid closing the same client twice if only one was opened
-                    await taskClient.close().catch(err => console.error("Error closing task DB client:", err));
-                 }
-             }
+        } catch (kvError) {
+            console.error("KV error in saveBrandingData handler:", kvError);
+            return JSON.stringify({ success: false, error: `Failed to save branding data: ${kvError.message}` });
         }
     }
-    // Add other handlers here
 };
 
 // --- Polling Configuration ---
@@ -132,8 +170,8 @@ const MAX_POLLING_ATTEMPTS = 60;
 export async function onRequestPost(context) {
      try {
         const apiKey = context.env.OPENAI_API_KEY;
-        const mongoUri = context.env.MONGODB_URI;
-        if (!apiKey || !mongoUri) throw new Error('Missing OPENAI_API_KEY or MONGODB_URI');
+        const kvBinding = context.env.APP_DATA;
+        if (!apiKey || !kvBinding) throw new Error('Missing OPENAI_API_KEY or APP_DATA KV binding');
 
         const openai = new OpenAI({ apiKey });
 
@@ -144,30 +182,19 @@ export async function onRequestPost(context) {
         }
         const assistantEnvVarName = assistantMap[topic];
         if (!assistantEnvVarName) { 
-            return new Response(JSON.stringify({ error: `No assistant for topic: ${topic}` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ error: `No assistant configured for topic: ${topic}` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
          }
         const assistantId = context.env[assistantEnvVarName];
-        if (!assistantId) throw new Error(`Missing env var: ${assistantEnvVarName}`);
+        if (!assistantId) throw new Error(`Missing env var ${assistantEnvVarName} for topic ${topic}`);
 
+        // Select correct tools based on topic
         let toolsForRun = [];
-        if (topic === "Customer Information") { 
-            // Ensure the parameters are correct within the tools definition passed to the run
-             toolsOpenAIFormat[0].function.parameters = {
-                  type: "object",
-                  properties: {
-                    customerName: { type: "string", description: "Full name of the customer" },
-                    companyName: { type: "string", description: "Name of the customer company (optional)" },
-                    email: { type: "string", description: "Customer email address" },
-                    projectNeeds: { type: "string", description: "Summary of the customer project needs" },
-                    timeline: { type: "string", description: "Project timeline (optional)" },
-                    budget: { type: "string", description: "Estimated budget (optional)" },
-                    logoLink: { type: "string", description: "URL link to the customer logo file (e.g., SVG, PNG) (optional)" },
-                    primaryBrandColor: { type: "string", description: "Primary brand color (e.g., hex code like #FFFFFF) (optional)" },
-                },
-                required: ["customerName", "email", "projectNeeds"]
-            };
-            toolsForRun = toolsOpenAIFormat; 
+        if (topic === "Customer Information") {
+            toolsForRun = [customerInfoTool]; 
+        } else if (topic === "Branding Settings") {
+             toolsForRun = [brandingTool];
         }
+        // Add other topic/tool mappings here
 
         let threadId = existingThreadId;
         if (!threadId) {
@@ -185,7 +212,7 @@ export async function onRequestPost(context) {
         });
         console.log(`Run created: ${run.id}`);
 
-        // --- Polling Loop (Pass context to handlers) ---
+        // --- Polling Loop (Pass context and threadId to handlers) ---
         let attempts = 0;
         while (["queued", "in_progress", "cancelling"].includes(run.status) && attempts < MAX_POLLING_ATTEMPTS) {
             await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
@@ -202,12 +229,12 @@ export async function onRequestPost(context) {
                         console.log(`Calling handler for: ${functionName}`);
                         try {
                             const args = JSON.parse(toolCall.function.arguments);
-                            // Pass context to the handler
-                            const output = await handler(args, context);
+                            // Pass context AND threadId to the handler
+                            const output = await handler(args, context, threadId);
                             toolOutputs.push({ tool_call_id: toolCall.id, output: output });
                         } catch (error) { 
-                            console.error(`Error executing tool ${functionName}:`, error);
-                            toolOutputs.push({ tool_call_id: toolCall.id, output: JSON.stringify({ error: `Failed to execute tool: ${error.message}` }) });
+                            console.error(`Error executing or parsing args for tool ${functionName}:`, error);
+                            toolOutputs.push({ tool_call_id: toolCall.id, output: JSON.stringify({ error: `Failed to execute tool or parse args: ${error.message}` }) });
                          }
                     } else { 
                         console.warn(`No handler found for tool: ${functionName}`);
@@ -221,7 +248,8 @@ export async function onRequestPost(context) {
                 } else { console.warn("Required action was tool calls, but no outputs generated."); }
             }
         }
-         // ... (Process Final Run Status - remains the same) ...
+        
+        // --- Process Final Run Status ---
         let reply = "An unknown error occurred.";
         if (run.status === "completed") {
              console.log("Run completed, retrieving messages.");
@@ -234,7 +262,7 @@ export async function onRequestPost(context) {
                  console.log("Latest messages data:", messages.data);
              }
         } else if (run.status === "requires_action") {
-            reply = "Assistant requires further action (tool call error?).";
+            reply = "Assistant requires further action but it couldn't be processed.";
             console.error("Run ended with requires_action status unexpectedly.");
         } else {
              reply = `Request failed (Status: ${run.status}).`;
@@ -253,30 +281,29 @@ export async function onRequestPost(context) {
         return new Response(responseData, { headers: { 'Content-Type': 'application/json' }, status: 200 });
 
     } catch (error) {
-        // ... (Error handling - remains the same) ...
-         console.error('Error in /api/chat:', error);
-         const errorMessage = error instanceof Error ? error.message : String(error);
-         return new Response(JSON.stringify({ error: 'Failed processing request', details: errorMessage }), {
-             headers: { 'Content-Type': 'application/json' },
-             status: 500
-         });
+        console.error('Error in /api/chat:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return new Response(JSON.stringify({ error: 'Failed processing request', details: errorMessage }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 500
+        });
     }
 }
 
-// --- onRequest Handler (remains the same) ---
+// --- onRequest Handler ---
 export async function onRequest(context) {
    // ... (remains the same) ...
-    if (context.request.method === 'POST') {
-        return onRequestPost(context);
-    }
-    if (context.request.method === 'OPTIONS') {
-        return new Response(null, {
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
-            }
-        });
-    }
-    return new Response(`Method ${context.request.method} Not Allowed`, { status: 405 });
+     if (context.request.method === 'POST') {
+         return onRequestPost(context);
+     }
+     if (context.request.method === 'OPTIONS') {
+         return new Response(null, {
+             headers: {
+                 'Access-Control-Allow-Origin': '*',
+                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                 'Access-Control-Allow-Headers': 'Content-Type',
+             }
+         });
+     }
+     return new Response(`Method ${context.request.method} Not Allowed`, { status: 405 });
 }

@@ -1,22 +1,43 @@
 // functions/api/tasks/[[path]].js
+import { v4 as uuidv4 } from 'uuid';
 
-import { getTasksCollection, ObjectId } from '../../databases/db.js';
+// Helper to parse task JSON safely
+function parseTask(value) {
+    try {
+        return JSON.parse(value);
+    } catch (e) {
+        console.error("Error parsing task JSON from KV:", e, "Value:", value);
+        return null; // Return null if parsing fails
+    }
+}
 
+// Main handler function for all requests to /api/tasks/*
 export async function onRequest(context) {
     const { request, env, params } = context;
     const method = request.method;
     const pathSegments = params.path || [];
     const taskId = pathSegments.length > 0 ? pathSegments[0] : null;
+    const kv = env.APP_DATA; // Get KV binding
 
-    console.log(`Tasks API (Node Driver / Per-Request): Method=${method}, Path=${request.url}, TaskId=${taskId}`);
+    console.log(`Tasks API (KV): Method=${method}, Path=${request.url}, TaskId=${taskId}`);
 
-    let dbClient = null; // Variable to hold the client for closing
     try {
-        // --- GET /api/tasks --- (Fetch all tasks)
+        // --- GET /api/tasks --- (List all tasks)
         if (method === 'GET' && !taskId) {
-            const { client, collection } = await getTasksCollection(context);
-            dbClient = client; // Assign client for finally block
-            const tasks = await collection.find({}).sort({ createdAt: -1 }).toArray();
+            console.log("Listing tasks from KV...");
+            const listResult = await kv.list({ prefix: "task:" });
+            const tasks = [];
+            for (const key of listResult.keys) {
+                const value = await kv.get(key.name);
+                if (value) {
+                     const task = parseTask(value);
+                     if (task) tasks.push(task);
+                }
+            }
+             // Sort tasks (e.g., by createdAt, or an 'order' field if added)
+            tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Newest first
+
+            console.log(`Found ${tasks.length} tasks.`);
             return new Response(JSON.stringify(tasks), {
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -24,81 +45,102 @@ export async function onRequest(context) {
 
         // --- POST /api/tasks --- (Create new task)
         if (method === 'POST' && !taskId) {
-            const { client, collection } = await getTasksCollection(context);
-            dbClient = client;
+            console.log("Creating new task in KV...");
             const newTaskData = await request.json();
+            const taskId = uuidv4();
+            const taskKey = `task:${taskId}`;
             const taskToInsert = {
+                _id: taskId,
                 name: newTaskData.name || 'Untitled Task',
                 completed: false,
                 tags: newTaskData.tags || [],
-                dueDate: newTaskData.dueDate ? new Date(newTaskData.dueDate) : null,
-                createdAt: new Date(),
+                dueDate: newTaskData.dueDate ? new Date(newTaskData.dueDate).toISOString() : null, // Store dates as ISO strings
+                createdAt: new Date().toISOString(),
                 order: Date.now()
             };
-            const result = await collection.insertOne(taskToInsert);
-            const createdTask = await collection.findOne({ _id: result.insertedId });
-             if (!createdTask) throw new Error("Failed to fetch created task after insert.");
-            return new Response(JSON.stringify(createdTask), {
-                status: 201, headers: { 'Content-Type': 'application/json' }
+            await kv.put(taskKey, JSON.stringify(taskToInsert));
+            console.log(`Task created with key: ${taskKey}`);
+            return new Response(JSON.stringify(taskToInsert), {
+                status: 201,
+                headers: { 'Content-Type': 'application/json' }
             });
         }
 
         // --- PUT /api/tasks/:id --- (Update task)
         if (method === 'PUT' && taskId) {
-            if (!ObjectId.isValid(taskId)) {
-                return new Response(JSON.stringify({ error: 'Invalid Task ID format' }), { status: 400 });
-            }
-            const { client, collection } = await getTasksCollection(context);
-            dbClient = client;
-            const updates = await request.json();
-            const updateDoc = { $set: {} };
-
-             // Build updateDoc as before
-             if (updates.name !== undefined) updateDoc.$set.name = updates.name;
-             if (updates.completed !== undefined) updateDoc.$set.completed = updates.completed;
-             if (updates.dueDate !== undefined) updateDoc.$set.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
-             if (updates.tags !== undefined && Array.isArray(updates.tags)) updateDoc.$set.tags = updates.tags;
-             updateDoc.$set.updatedAt = new Date();
-
-             if (Object.keys(updateDoc.$set).length <= 1) {
-                 return new Response(JSON.stringify({ error: 'No valid fields provided for update' }), { status: 400 });
+             console.log(`Updating task ${taskId} in KV...`);
+             const taskKey = `task:${taskId}`;
+             const existingValue = await kv.get(taskKey);
+             if (!existingValue) {
+                 return new Response(JSON.stringify({ error: 'Task not found' }), { status: 404, headers: { 'Content-Type': 'application/json' }});
              }
 
-            const result = await collection.findOneAndUpdate(
-                { _id: new ObjectId(taskId) },
-                updateDoc,
-                { returnDocument: 'after' }
-            );
+             const existingTask = parseTask(existingValue);
+             if (!existingTask) {
+                  return new Response(JSON.stringify({ error: 'Failed to parse existing task data' }), { status: 500, headers: { 'Content-Type': 'application/json' }});
+             }
 
-            if (!result) {
-                return new Response(JSON.stringify({ error: 'Task not found' }), { status: 404 });
+            const updates = await request.json();
+            let changed = false;
+
+            // Apply updates
+            if (updates.name !== undefined && updates.name !== existingTask.name) {
+                 existingTask.name = updates.name;
+                 changed = true;
+             }
+            if (updates.completed !== undefined && updates.completed !== existingTask.completed) {
+                 existingTask.completed = updates.completed;
+                 changed = true;
+             }
+            if (updates.dueDate !== undefined) {
+                 const newDueDate = updates.dueDate ? new Date(updates.dueDate).toISOString() : null;
+                 if (newDueDate !== existingTask.dueDate) {
+                     existingTask.dueDate = newDueDate;
+                     changed = true;
+                 }
+             }
+             if (updates.tags !== undefined && Array.isArray(updates.tags)) {
+                 // Basic check if arrays are different (could be more sophisticated)
+                 if (JSON.stringify(updates.tags) !== JSON.stringify(existingTask.tags)) {
+                     existingTask.tags = updates.tags;
+                     changed = true;
+                 }
             }
-            return new Response(JSON.stringify(result), {
+             existingTask.updatedAt = new Date().toISOString();
+
+             if (!changed) {
+                  console.log(`No changes detected for task ${taskId}`);
+                  return new Response(JSON.stringify(existingTask), { headers: { 'Content-Type': 'application/json' }});
+             }
+
+            await kv.put(taskKey, JSON.stringify(existingTask));
+            console.log(`Task ${taskId} updated.`);
+            return new Response(JSON.stringify(existingTask), {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
 
         // --- DELETE /api/tasks/:id --- (Delete task)
         if (method === 'DELETE' && taskId) {
-            if (!ObjectId.isValid(taskId)) {
-                 return new Response(JSON.stringify({ error: 'Invalid Task ID format' }), { status: 400 });
-            }
-            const { client, collection } = await getTasksCollection(context);
-            dbClient = client;
-            const result = await collection.deleteOne({ _id: new ObjectId(taskId) });
-            if (result.deletedCount === 0) {
-                return new Response(JSON.stringify({ error: 'Task not found' }), { status: 404 });
-            }
+             console.log(`Deleting task ${taskId} from KV...`);
+             const taskKey = `task:${taskId}`;
+             // Check if exists before deleting (optional, delete is idempotent)
+            // const existingValue = await kv.get(taskKey);
+            // if (!existingValue) {
+            //    return new Response(JSON.stringify({ error: 'Task not found' }), { status: 404 });
+            // }
+             await kv.delete(taskKey);
+             console.log(`Task ${taskId} deleted.`);
             return new Response(JSON.stringify({ success: true, message: 'Task deleted' }), {
-                 headers: { 'Content-Type': 'application/json' }
-             });
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
 
         // --- OPTIONS (for CORS preflight) ---
         if (method === 'OPTIONS') {
             return new Response(null, {
                 headers: {
-                    'Access-Control-Allow-Origin': '*', // Adjust for production
+                    'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
                     'Access-Control-Allow-Headers': 'Content-Type',
                 }
@@ -111,15 +153,9 @@ export async function onRequest(context) {
         });
 
     } catch (error) {
-        console.error("Error in tasks API (Node Driver):", error);
+        console.error("Error in tasks API (KV):", error);
         return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), {
             status: 500, headers: { 'Content-Type': 'application/json' }
         });
-    } finally {
-        // Ensure the client connection is closed after the request is handled
-        if (dbClient) {
-            // console.log("Closing MongoDB client connection for this request...");
-             await dbClient.close().catch(err => console.error("Error closing MongoDB client:", err));
-        }
     }
 }

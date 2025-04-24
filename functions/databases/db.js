@@ -1,58 +1,115 @@
 // functions/databases/db.js
-import { MongoClient, ObjectId } from 'mongodb';
 
-// Function to get a DB connection for the current request context
-async function getDbConnection(context) {
-    const uri = context.env.MONGODB_URI;
-    if (!uri) {
-        throw new Error('MongoDB URI is not defined. Set MONGODB_URI environment variable.');
+// Helper function to construct the Data API request body
+const createDataApiPayload = (dataSource, database, collection, action, params = {}) => ({
+    dataSource: dataSource || 'Cluster0', // Default Atlas cluster name, adjust if needed
+    database: database,
+    collection: collection,
+    ...params,
+});
+
+// Helper function to make the Data API fetch call
+async function fetchMongoDataAPI(context, action, params) {
+    const DATA_API_URL = context.env.DATA_API_URL;
+    const DATA_API_KEY = context.env.DATA_API_KEY;
+
+    if (!DATA_API_URL || !DATA_API_KEY) {
+        throw new Error('Missing DATA_API_URL or DATA_API_KEY environment variables.');
     }
 
-    let client;
+    // Extract DB name from the environment or use a default
+    const DB_NAME = context.env.DB_NAME || 'defaultDb'; 
+    const DATA_SOURCE = context.env.DATA_SOURCE || 'Cluster0';
+
+    const url = `${DATA_API_URL}/action/${action}`;
+    const collection = params.collection; 
+    if (!collection) {
+        throw new Error('Collection name must be provided in params for Data API call.');
+    }
+
+    const payload = createDataApiPayload(DATA_SOURCE, DB_NAME, collection, action, params);
+
     try {
-        // console.log("Creating new MongoDB connection for this request...");
-        client = new MongoClient(uri, {
-            serverApi: {
-                version: '1',
-                strict: true,
-                deprecationErrors: true,
-            }
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': DATA_API_KEY,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
         });
 
-        await client.connect();
-        // console.log("MongoDB connected for this request.");
-
-        const urlParts = uri.split('/');
-        const pathPart = urlParts.length > 3 ? urlParts[3] : null;
-        const dbNameFromUri = pathPart ? pathPart.split('?')[0] : null;
-        const dbName = dbNameFromUri || 'defaultDb';
-
-        const db = client.db(dbName);
-
-        // Return both client and db - IMPORTANT: Client needs closing by caller
-        return { client, db };
+        if (!response.ok) {
+            let errorBody;
+            try { errorBody = await response.json(); } catch (e) { errorBody = await response.text(); }
+            console.error("Data API Error Response:", errorBody);
+            throw new Error(`Data API request failed: ${response.status} ${response.statusText}`);
+        }
+        return await response.json();
 
     } catch (error) {
-        console.error("Failed to connect to MongoDB", error);
-        if (client) {
-            // Attempt to close client if connection failed mid-way
-             try { await client.close(); } catch (closeErr) { console.error("Error closing client after connection failure:", closeErr); }
-        }
-        throw error;
+        console.error(`Data API fetch error for action ${action}:`, error);
+        throw error; 
     }
 }
 
-// Export ObjectId for use in other files
-export { ObjectId };
+// --- Collection Helper Functions --- 
 
-// Helper returns client and collection - CALLER MUST CLOSE CLIENT
-export async function getTasksCollection(context) {
-    const { client, db } = await getDbConnection(context);
-    return { client, collection: db.collection('tasks') };
+// Find documents
+export async function findDocuments(context, collection, filter = {}, options = {}) {
+    const params = { collection, filter, ...options }; 
+    const result = await fetchMongoDataAPI(context, 'find', params);
+    return result.documents || []; 
 }
 
-// Helper returns client and collection - CALLER MUST CLOSE CLIENT
-export async function getCustomersCollection(context) {
-    const { client, db } = await getDbConnection(context);
-    return { client, collection: db.collection('customers') };
+// Find a single document
+export async function findOneDocument(context, collection, filter = {}, options = {}) {
+    const params = { collection, filter, ...options };
+    const result = await fetchMongoDataAPI(context, 'findOne', params);
+    return result.document; 
+}
+
+// Insert a single document
+export async function insertOneDocument(context, collection, document) {
+    const params = { collection, document };
+    const result = await fetchMongoDataAPI(context, 'insertOne', params);
+    return result; // Contains { insertedId: "..." }
+}
+
+// Update a single document
+export async function updateOneDocument(context, collection, filter, update, options = {}) {
+    const params = { collection, filter, update, ...options }; 
+    const result = await fetchMongoDataAPI(context, 'updateOne', params);
+    return result; // Contains { matchedCount, modifiedCount, upsertedId (optional) }
+}
+
+// Delete a single document
+export async function deleteOneDocument(context, collection, filter) {
+    const params = { collection, filter };
+    const result = await fetchMongoDataAPI(context, 'deleteOne', params);
+    return result; // Contains { deletedCount: 1 }
+}
+
+// Convenience functions for specific collections
+export async function getTasksCollectionHelper(context) {
+    const collectionName = 'tasks';
+    return {
+        find: (filter = {}, options = {}) => findDocuments(context, collectionName, filter, options),
+        findOne: (filter = {}, options = {}) => findOneDocument(context, collectionName, filter, options),
+        insertOne: (document) => insertOneDocument(context, collectionName, document),
+        updateOne: (filter, update, options = {}) => updateOneDocument(context, collectionName, filter, update, options),
+        deleteOne: (filter) => deleteOneDocument(context, collectionName, filter),
+    };
+}
+
+export async function getCustomersCollectionHelper(context) {
+    const collectionName = 'customers';
+    return {
+        find: (filter = {}, options = {}) => findDocuments(context, collectionName, filter, options),
+        findOne: (filter = {}, options = {}) => findOneDocument(context, collectionName, filter, options),
+        insertOne: (document) => insertOneDocument(context, collectionName, document),
+        updateOne: (filter, update, options = {}) => updateOneDocument(context, collectionName, filter, update, options),
+        deleteOne: (filter) => deleteOneDocument(context, collectionName, filter),
+    };
 }
