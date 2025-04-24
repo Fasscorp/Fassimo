@@ -105,17 +105,17 @@ export async function onRequestPost(context) {
 
         // Check the response structure carefully based on SDK documentation
         if (response?.type === 'message' && response.message?.role === 'assistant' && response.message?.content) {
-             // FIX: Escape the newline character for the join
-            reply = Array.isArray(response.message.content) ? response.message.content.join('
-') : String(response.message.content);
+             // FIX 2: Use double quotes for newline character
+            reply = Array.isArray(response.message.content) ? response.message.content.join("
+") : String(response.message.content);
         } else if (response?.type === 'tool_call_result') {
             reply = response.result?.message || "Okay, I've processed that request.";
         } else {
              console.warn("Unexpected response format from conversation.send():", JSON.stringify(response, null, 2));
              if (response?.message?.content) {
-                  // FIX: Escape the newline character for the join
-                 reply = Array.isArray(response.message.content) ? response.message.content.join('
-') : String(response.message.content);
+                  // FIX 2: Use double quotes for newline character
+                 reply = Array.isArray(response.message.content) ? response.message.content.join("
+") : String(response.message.content);
              } else if (typeof response?.result?.message === 'string') {
                  reply = response.result.message;
              }
