@@ -1,6 +1,6 @@
 # wrangler.toml
 name = "myapp" # Replace with your actual project name if desired
-compatibility_date = "2024-04-24" # Use a recent date
+compatibility_date = "2024-09-23" # Updated compatibility date as suggested by error
 
 # Pages build output directory
 pages_build_output_dir = "dist"
