@@ -42,6 +42,9 @@
     </div>
 
     <div id="main">
+        <!-- Vue App Mount Point Moved Inside #main -->
+        <div id="app"></div>
+
         <div id="chatbox">
             <!-- Chat messages will go here -->
              <p><em>Select a topic from the sidebar or start typing.</em></p>
@@ -85,12 +88,8 @@
         </div>
     </div>
 
-    <!-- Mount point for Vue app -->
-    <div id="app"></div>
-
     <!-- Main entry point script, handles Vue and imports -->
     <script type="module" src="/src/main.ts"></script>
-    <!-- Removed inline <script> block -->
 
 </body>
 </html>

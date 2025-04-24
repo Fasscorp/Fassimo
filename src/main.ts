@@ -1,8 +1,8 @@
 import { createApp } from 'vue'
-import './style.css' // Keep existing global styles
+// import './style.css' // REMOVED - Styles are consolidated in layout.css
 import App from './App.vue'
 
-// Import the new layout CSS and JS
+// Import the consolidated layout CSS and the controller JS
 import './layout.css';
 import './layout-controller.js';
 
