@@ -1,5 +1,6 @@
 
-import { defineTool } from '@modelcontextprotocol/sdk';
+// Try importing from a potential subpath with .js extension
+import { defineTool } from '@modelcontextprotocol/sdk/tool.js';
 import { customerInfoSchema } from '../schemas/customer-info.schema.js'; // Import the schema
 
 // Define and export the tool for saving customer information

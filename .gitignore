@@ -20,3 +20,4 @@ dist-ssr
 
 # OSX
 .DS_Store
+.dev.vars

@@ -5,14 +5,21 @@
 
   /* Define base colors - can be overridden */
   --text-color: #333;
+  --text-muted-color: #888;
   --background-color: #f0f0f0;
   --sidebar-bg: #eee;
   --main-bg: #fff;
   --input-bg: #f8f8f8;
   --border-color: #ccc;
+  --row-border-color: #e0e0e0; /* Lighter border for rows */
   --primary-color: #5835D8;
   --link-color: #646cff;
   --link-hover-color: #535bf2;
+  --checkmark-border: #aaa;
+  --checkmark-checked-bg: var(--primary-color);
+  --checkmark-checked-color: white;
+  --sortable-ghost-bg: #f0f8ff; /* Background for drop placeholder */
+
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -29,107 +36,31 @@ body {
     color: var(--text-color);
 }
 
-#sidebar {
-    width: 200px;
-    background-color: var(--sidebar-bg);
-    padding: 20px;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    color: var(--text-color); /* Explicit text color */
-}
+/* --- Sidebar / Main Layout (Keep as is) --- */
+#sidebar { width: 200px; background-color: var(--sidebar-bg); padding: 20px; box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1); overflow-y: auto; display: flex; flex-direction: column; color: var(--text-color); }
+#sidebar ul { list-style: none; padding: 0; margin: 0; }
+#sidebar li, #sidebar .sidebar-topic { padding: 8px 0; cursor: pointer; }
+#sidebar a { text-decoration: none; color: inherit; }
+#sidebar h2 { margin-top: 0; font-size: 1.5em; }
+#main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; background-color: var(--main-bg); }
+#chatbox { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; }
+#chatbox p { margin-bottom: 1em; font-size: 1.1em; }
+#input-area { padding: 20px; border-top: 1px solid var(--border-color); display: flex; background-color: var(--input-bg); }
+#message-input { flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--main-bg); color: var(--text-color); font-size: 1em; }
+#send-button { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-left: 10px; font-size: 1em; font-weight: 500; }
+.active-topic { font-weight: bold; color: var(--primary-color); }
+.section-divider { margin: 10px 0; border-bottom: 1px solid var(--border-color); width: 100%; }
+/* --- Accordion Styles (Keep as is) --- */
+.accordion-toggle { cursor: pointer; padding: 8px 0; display: block; font-weight: bold; position: relative; }
+.accordion-toggle::after { content: '\25B6'; position: absolute; right: 5px; font-size: 0.8em; transition: transform 0.2s ease-in-out; }
+.accordion-toggle.active::after { transform: rotate(90deg); }
+.accordion-content { display: none; padding-left: 15px; list-style: none; margin: 0; }
+.accordion-content.show { display: block; }
+.accordion-content .sidebar-topic { display: block; font-weight: normal; }
 
-#sidebar ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-#sidebar li,
-#sidebar .sidebar-topic {
-    padding: 8px 0;
-    cursor: pointer;
-}
-
-#sidebar a {
-    text-decoration: none;
-    color: inherit;
-}
-
-#sidebar h2 {
-    margin-top: 0;
-    font-size: 1.5em; /* Example size */
-}
-
-#main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    background-color: var(--main-bg);
-}
-
-#chatbox {
-    flex: 1;
-    padding: 20px;
-    overflow-y: scroll;
-    display: flex;
-    flex-direction: column;
-}
-
-#chatbox p {
-    margin-bottom: 1em; /* Spacing between messages */
-}
-
-#chatbox p b {
-    /* Style for sender name if needed */
-}
-
-#input-area {
-    padding: 20px;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    background-color: var(--input-bg);
-}
-
-#message-input {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    background-color: var(--main-bg); /* White background */
-    color: var(--text-color); /* Dark text color */
-    font-size: 1em; /* Ensure font size is reasonable */
-}
-
-#send-button {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-left: 10px;
-    font-size: 1em;
-    font-weight: 500;
-}
-
-/* Style the active topic */
-.active-topic {
-    font-weight: bold;
-    color: var(--primary-color);
-}
-
-/* Style for section dividers */
-.section-divider {
-    margin: 10px 0;
-    border-bottom: 1px solid var(--border-color);
-    width: 100%;
-}
-
-/* Style for the task list */
+/* ============================ */
+/* --- Task List Styles --- */
+/* ============================ */
 #task-list {
     flex: 1;
     padding: 20px;
@@ -143,105 +74,175 @@ body {
 
 #task-list table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: collapse; /* Remove cell spacing */
+    border-spacing: 0;
+    border-top: 1px solid var(--row-border-color); /* Add top border */
 }
 
 #task-list th,
 #task-list td {
-    border: 1px solid var(--border-color);
-    padding: 8px;
+    border: none; /* Remove all cell borders */
+    border-bottom: 1px solid var(--row-border-color); /* Add border only below rows */
+    padding: 10px 8px; /* Adjust padding */
     text-align: left;
+    vertical-align: middle; /* Align content vertically */
 }
 
 #task-list th {
-    background-color: var(--sidebar-bg); /* Use sidebar bg for header */
+    /* Optional: Style header differently */
+    /* background-color: #f9f9f9; */
+    font-weight: bold;
+    color: var(--text-muted-color);
+    font-size: 0.9em;
 }
 
+/* Specific Column Widths (Adjusted for Handle) */
+#task-list th:nth-child(1), /* Handle */
+#task-list td:nth-child(1) {
+    width: 30px;
+    text-align: center;
+}
+#task-list th:nth-child(2), /* Row Number */
+#task-list td:nth-child(2) {
+    width: 30px;
+    text-align: right;
+    color: var(--text-muted-color);
+}
+#task-list th:nth-child(3), /* Complete */
+#task-list td:nth-child(3) {
+    width: 40px;
+    text-align: center;
+}
+#task-list th:nth-child(4), /* Task Name */
+#task-list td:nth-child(4) {
+    /* Let it take remaining space */
+}
+#task-list th:nth-child(5), /* Due Date */
+#task-list td:nth-child(5) {
+    width: 120px;
+}
+#task-list th:nth-child(6), /* Tags */
+#task-list td:nth-child(6) {
+    width: 150px;
+}
+#task-list th:nth-child(7), /* Actions */
+#task-list td:nth-child(7) {
+    width: 60px;
+    text-align: center;
+}
+
+
+/* Task Name Styling */
 .task-name {
-   /* Style for editable task name if needed */
+   /* Add styles for focus/editing later if needed */
 }
 
-#task-list button {
-    margin-bottom: 10px;
-    padding: 5px 10px;
+/* Input Styling within Table */
+#task-list td input[type="date"],
+#task-list td input[type="text"] {
+    width: 100%;
+    padding: 4px;
+    border: 1px solid transparent; /* Hide border initially */
+    background-color: transparent;
+    font-size: inherit; /* Use table font size */
+    box-sizing: border-box; /* Include padding/border in width */
+}
+#task-list td input[type="date"]:focus,
+#task-list td input[type="text"]:focus,
+#task-list td input[type="date"]:hover,
+#task-list td input[type="text"]:hover {
+    border: 1px solid var(--border-color); /* Show border on focus/hover */
+}
+
+/* Custom Checkmark Styling */
+.task-checkbox-container {
+    display: inline-block;
     cursor: pointer;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--checkmark-border);
+    border-radius: 50%; /* Make it a circle */
+    position: relative;
+    vertical-align: middle;
+    background-color: transparent;
+}
+.task-checkbox-container.checked {
+    background-color: var(--checkmark-checked-bg);
+    border-color: var(--checkmark-checked-bg);
+}
+.task-checkbox-container.checked::after {
+    content: '\2713'; /* Checkmark unicode */
+    color: var(--checkmark-checked-color);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Styling for completed rows */
+#task-table-body tr.completed td {
+     color: var(--text-muted-color);
+}
+#task-table-body tr.completed .task-name {
+    text-decoration: line-through;
+}
+
+/* General Button Styling (Keep as is or modify) */
+#task-list button {
+    /* Style for Add Task button */
+    margin-bottom: 15px;
+    padding: 8px 15px;
+    cursor: pointer;
+    border-radius: 5px;
     border: 1px solid var(--border-color);
+    background-color: #f5f5f5;
+}
+#task-list button:hover {
+    background-color: #e9e9e9;
 }
 
 .delete-task-btn {
     padding: 2px 5px;
     cursor: pointer;
-    color: red;
+    color: var(--text-muted-color);
     background: none;
     border: none;
-    font-size: 0.8em;
+    font-size: 1.2em; /* Make delete icon slightly larger */
+    line-height: 1;
+}
+.delete-task-btn:hover {
+    color: red;
 }
 
-/* --- Accordion Styles --- */
-.accordion-toggle {
-    cursor: pointer;
-    padding: 8px 0;
-    display: block;
-    font-weight: bold;
-    position: relative;
+/* Drag Handle Styling */
+.drag-handle {
+    cursor: grab;
+    color: var(--text-muted-color);
+    display: inline-block;
+    width: 100%; /* Ensure it fills cell */
+    text-align: center;
+}
+.drag-handle:active {
+    cursor: grabbing;
 }
 
-.accordion-toggle::after {
-    content: '\25B6'; /* Right arrow */
-    position: absolute;
-    right: 5px;
-    font-size: 0.8em;
-    transition: transform 0.2s ease-in-out;
+/* SortableJS Helper Classes */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: var(--sortable-ghost-bg);
+}
+.sortable-chosen, .sortable-drag {
+    /* Add styles for the item being dragged if needed */
+    /* Example: opacity: 0.8; */
 }
 
-.accordion-toggle.active::after {
-    transform: rotate(90deg);
-}
-
-.accordion-content {
-    display: none;
-    padding-left: 15px;
-    list-style: none;
-    margin: 0;
-}
-
-.accordion-content.show {
-    display: block;
-}
-
-.accordion-content .sidebar-topic {
-    display: block;
-    font-weight: normal; /* Regular weight for sub-items */
-}
-/* --- End Accordion Styles --- */
 
 /* Basic Link Styles */
-a {
-  font-weight: 500;
-  color: var(--link-color);
-  text-decoration: inherit;
-}
-a:hover {
-  color: var(--link-hover-color);
-}
+a { font-weight: 500; color: var(--link-color); text-decoration: inherit; }
+a:hover { color: var(--link-hover-color); }
 
-/* Basic Button Styles (can be refined) */
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-/* Example hover for non-specific buttons */
-/* button:hover {
-  border-color: var(--link-color);
-}*/
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
+/* Basic Button Styles (general) */
+button { border-radius: 8px; border: 1px solid transparent; padding: 0.6em 1.2em; font-size: 1em; font-weight: 500; font-family: inherit; cursor: pointer; transition: border-color 0.25s; }
+button:focus, button:focus-visible { outline: 4px auto -webkit-focus-ring-color; }
